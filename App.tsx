@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Send, 
   History, 
@@ -10,9 +10,10 @@ import {
   Check, 
   Image as ImageIcon,
   Edit3,
-  ExternalLink,
   Trash2,
-  Plus
+  Plus,
+  Download,
+  Zap
 } from 'lucide-react';
 import { GeneratedPost, WebhookResponse } from './types';
 
@@ -25,9 +26,9 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<GeneratedPost[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [showPostGuide, setShowPostGuide] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Load history and theme on mount
   useEffect(() => {
     const savedHistory = localStorage.getItem('post_history');
     if (savedHistory) setHistory(JSON.parse(savedHistory));
@@ -79,24 +80,38 @@ const App: React.FC = () => {
       setHistory(prev => [newPost, ...prev]);
     } catch (error) {
       console.error('Error:', error);
-      alert('Generation failed. Please check the n8n webhook or try again.');
+      alert('Generation failed. Please try again.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const copyToClipboard = () => {
-    if (!currentPost) return;
-    navigator.clipboard.writeText(currentPost.postContent);
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text);
     setCopyFeedback(true);
     setTimeout(() => setCopyFeedback(false), 2000);
   };
 
-  const shareOnLinkedIn = () => {
-    // Standard LinkedIn share intent URL (mostly useful for sharing specific web URLs)
-    // For manual posting, we provide the copy button.
-    const url = encodeURIComponent('https://your-app-domain.com'); // In a real app, this might be a public view of the post
-    window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}`, '_blank');
+  const downloadImage = (dataUrl: string) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = `linkedin-post-${Date.now()}.png`;
+    link.click();
+  };
+
+  const handlePostToLinkedIn = async () => {
+    if (!currentPost) return;
+
+    // 1. Copy text to clipboard
+    await navigator.clipboard.writeText(currentPost.postContent);
+    
+    // 2. Show the helpful guide
+    setShowPostGuide(true);
+    
+    // 3. Open LinkedIn in a new tab (after a tiny delay so user sees the modal)
+    setTimeout(() => {
+      window.open('https://www.linkedin.com/feed/?shareActive=true', '_blank');
+    }, 1200);
   };
 
   const deletePost = (id: string) => {
@@ -110,10 +125,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+    <div className="flex h-screen bg-gray-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300 overflow-hidden">
       
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-80' : 'w-0 overflow-hidden'} transition-all duration-300 border-r border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-800 flex flex-col`}>
+      <aside className={`${sidebarOpen ? 'w-80' : 'w-0 overflow-hidden'} transition-all duration-300 border-r border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-800 flex flex-col z-20`}>
         <div className="p-6 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center text-white">
@@ -124,7 +139,6 @@ const App: React.FC = () => {
           <button 
             onClick={startNew}
             className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors"
-            title="New Post"
           >
             <Plus size={20} />
           </button>
@@ -164,8 +178,7 @@ const App: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col relative overflow-hidden">
-        {/* Top Header */}
+      <main className="flex-1 flex flex-col relative">
         <header className="h-16 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-10">
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -181,133 +194,117 @@ const App: React.FC = () => {
             >
               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <a 
-              href="https://linkedin.com" 
-              target="_blank" 
-              rel="noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-lg shadow-blue-500/20"
-            >
-              <ExternalLink size={16} />
-              Open LinkedIn
-            </a>
           </div>
         </header>
 
-        {/* Workspace */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center">
-          <div className="w-full max-w-4xl space-y-8">
+          <div className="w-full max-w-5xl space-y-8 pb-20">
             
             {/* Input Section */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-700">
               <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
                 <Edit3 className="text-blue-500" size={20} />
-                What's the topic today?
+                Post Creator
               </h2>
               <div className="flex flex-col sm:flex-row gap-3">
                 <input 
                   type="text" 
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g. The future of AI in frontend engineering..."
+                  placeholder="Topic: The importance of networking..."
                   className="flex-1 px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && generatePost()}
                 />
                 <button 
                   onClick={generatePost}
                   disabled={isGenerating || !topic.trim()}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/30"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20"
                 >
-                  {isGenerating ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Generating...
-                    </div>
-                  ) : (
-                    <>
-                      <Send size={18} />
-                      Generate Post
-                    </>
-                  )}
+                  {isGenerating ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Zap size={18} />}
+                  {isGenerating ? 'Drafting...' : 'Create Post'}
                 </button>
               </div>
             </div>
 
-            {/* Results Section */}
             {currentPost && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Editor */}
+                {/* Text Editor */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold flex items-center gap-2">
                       <Edit3 size={18} className="text-blue-500" />
-                      Refine Content
+                      Content Editor
                     </h3>
                     <button 
-                      onClick={copyToClipboard}
-                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                      onClick={() => copyToClipboard(currentPost.postContent)}
+                      className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
                     >
                       {copyFeedback ? <Check size={14} /> : <Copy size={14} />}
-                      {copyFeedback ? 'Copied!' : 'Copy to Clipboard'}
+                      {copyFeedback ? 'Copied' : 'Copy Text'}
                     </button>
                   </div>
                   <textarea 
                     value={currentPost.postContent}
                     onChange={(e) => setCurrentPost({ ...currentPost, postContent: e.target.value })}
-                    className="w-full h-[400px] p-4 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none resize-none shadow-inner font-normal leading-relaxed"
+                    className="w-full h-[380px] p-5 rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none resize-none font-normal leading-relaxed text-sm shadow-inner"
                   />
-                  <button 
-                    onClick={shareOnLinkedIn}
-                    className="w-full py-4 bg-[#0077b5] hover:bg-[#006097] text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-xl shadow-blue-600/20"
-                  >
-                    <Linkedin size={20} />
-                    Open Share Dialog
-                  </button>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 text-center">
-                    Note: LinkedIn sharing intent doesn't support auto-pasting content yet. Click "Copy to Clipboard" above first.
-                  </p>
+                  
+                  <div className="flex flex-col gap-3">
+                    <button 
+                      onClick={handlePostToLinkedIn}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-3 transition-all transform active:scale-[0.98] shadow-xl shadow-blue-600/30"
+                    >
+                      <Linkedin size={22} />
+                      Post to LinkedIn (Fast)
+                    </button>
+                    
+                    <button 
+                      onClick={() => downloadImage(currentPost.dataUrl)}
+                      className="w-full py-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all shadow-sm"
+                    >
+                      <Download size={20} className="text-blue-500" />
+                      Download Image for Post
+                    </button>
+                  </div>
                 </div>
 
-                {/* Visual Preview */}
+                {/* Media Preview */}
                 <div className="space-y-4">
                   <h3 className="font-bold flex items-center gap-2">
                     <ImageIcon size={18} className="text-blue-500" />
-                    Visual Artwork
+                    Visual Component
                   </h3>
-                  <div className="aspect-square w-full bg-slate-200 dark:bg-slate-700 rounded-2xl overflow-hidden relative group shadow-2xl">
+                  <div className="aspect-square w-full bg-slate-100 dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-200 dark:border-slate-700 relative group shadow-lg">
                     <img 
                       src={currentPost.dataUrl} 
-                      alt="Generated AI art" 
+                      alt="AI Art" 
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button 
-                        onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = currentPost.dataUrl;
-                          link.download = `linkedin-post-${Date.now()}.png`;
-                          link.click();
-                        }}
-                        className="bg-white text-slate-900 px-6 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors"
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                       <button 
+                        onClick={() => downloadImage(currentPost.dataUrl)}
+                        className="bg-white text-slate-900 px-5 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-gray-100"
                       >
-                        Download Image
+                        <Download size={18} />
+                        Save Image
                       </button>
                     </div>
                   </div>
                   
-                  {/* Real-time Feed Preview */}
-                  <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-gray-200 dark:border-slate-700 shadow-sm">
+                  {/* Feed Preview Card */}
+                  <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-slate-200 rounded-full"></div>
-                      <div>
-                        <div className="h-3 w-24 bg-slate-200 rounded mb-1"></div>
-                        <div className="h-2 w-16 bg-slate-100 rounded"></div>
+                      <div className="w-9 h-9 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                      <div className="flex-1 space-y-1">
+                        <div className="h-2 w-24 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                        <div className="h-2 w-16 bg-slate-100 dark:bg-slate-700 rounded-full"></div>
                       </div>
                     </div>
-                    <div className="text-xs line-clamp-3 mb-3 text-slate-600 dark:text-slate-400">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mb-3">
                       {currentPost.postContent}
                     </div>
-                    <div className="aspect-video bg-slate-100 dark:bg-slate-900 rounded-md overflow-hidden">
-                       <img src={currentPost.dataUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="aspect-video bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden">
+                       <img src={currentPost.dataUrl} className="w-full h-full object-cover opacity-80" />
                     </div>
                   </div>
                 </div>
@@ -315,13 +312,13 @@ const App: React.FC = () => {
             )}
 
             {!currentPost && !isGenerating && (
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 mb-2">
-                  <Linkedin size={40} />
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 animate-in fade-in zoom-in-95 duration-700">
+                <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900/30 rounded-3xl flex items-center justify-center text-blue-600 mb-2 rotate-3 shadow-xl">
+                  <Linkedin size={48} />
                 </div>
-                <h1 className="text-3xl font-bold">Ready to dominate LinkedIn?</h1>
-                <p className="text-gray-500 dark:text-slate-400 max-w-md">
-                  Enter a topic and our AI will research the trend, write the copy, and generate custom visuals just for you.
+                <h1 className="text-4xl font-extrabold tracking-tight">Level up your network.</h1>
+                <p className="text-gray-500 dark:text-slate-400 max-w-lg text-lg">
+                  Stop struggling with captions. Describe your topic and get high-performing LinkedIn posts with unique AI art in seconds.
                 </p>
               </div>
             )}
@@ -329,25 +326,51 @@ const App: React.FC = () => {
         </div>
       </main>
 
+      {/* Guide Overlay Modal */}
+      {showPostGuide && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-3xl shadow-2xl p-8 border border-blue-100 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-full flex items-center justify-center mb-6 mx-auto">
+              <Check size={32} />
+            </div>
+            <h3 className="text-2xl font-bold text-center mb-2">Ready to Post!</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-center mb-8">
+              We've copied your text. Here's your final 2 steps on LinkedIn:
+            </p>
+            
+            <div className="space-y-4 mb-8">
+              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-gray-100 dark:border-slate-700">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">1</div>
+                <span className="font-medium">Paste the caption into the post box.</span>
+              </div>
+              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-slate-900/50 rounded-2xl border border-gray-100 dark:border-slate-700">
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">2</div>
+                <span className="font-medium">Upload the image you just downloaded.</span>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setShowPostGuide(false)}
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Loading Overlay */}
       {isGenerating && (
         <div className="fixed inset-0 z-50 bg-white/90 dark:bg-slate-900/95 flex flex-col items-center justify-center backdrop-blur-sm">
           <div className="relative w-32 h-32 mb-8">
             <div className="absolute inset-0 border-4 border-blue-500/20 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-4 bg-blue-500 rounded-full flex items-center justify-center text-white animate-pulse">
+            <div className="absolute inset-4 bg-blue-500 rounded-full flex items-center justify-center text-white">
               <Linkedin size={32} />
             </div>
           </div>
-          <h2 className="text-2xl font-bold mb-2">Generating your masterpiece...</h2>
-          <p className="text-gray-500 dark:text-slate-400 animate-pulse text-center max-w-sm px-4">
-            Our AI is researching your topic and painting a unique visual. This usually takes 30-45 seconds.
-          </p>
-          <div className="mt-8 flex gap-2">
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-            <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></span>
-          </div>
+          <h2 className="text-2xl font-bold mb-2">Analyzing Topic...</h2>
+          <p className="text-gray-500 dark:text-slate-400 animate-pulse">Researching current LinkedIn trends.</p>
         </div>
       )}
     </div>
