@@ -15,7 +15,7 @@ import {
   Download,
   Zap
 } from 'lucide-react';
-import { GeneratedPost, WebhookResponse } from './types';
+import { GeneratedPost, WebhookResponse } from './types.ts';
 
 const WEBHOOK_URL = 'https://muhammadahmadme085-n8n.hf.space/webhook/linkinpost';
 
