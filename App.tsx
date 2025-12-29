@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { GeneratedPost, WebhookResponse } from './types.ts';
 
+// Updated to the production webhook URL
 const WEBHOOK_URL = 'https://muhammadahmadme085-n8n.hf.space/webhook/linkinpost';
 
 const App: React.FC = () => {
@@ -29,7 +30,7 @@ const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [showPostGuide, setShowPostGuide] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Default closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem('post_history');
@@ -40,7 +41,6 @@ const App: React.FC = () => {
       setIsDarkMode(true);
     }
 
-    // Auto-open sidebar on large screens
     if (window.innerWidth >= 1024) {
       setSidebarOpen(true);
     }
@@ -64,7 +64,6 @@ const App: React.FC = () => {
     if (!topic.trim()) return;
 
     setIsGenerating(true);
-    // Close sidebar on mobile when generating to focus on result
     if (window.innerWidth < 1024) setSidebarOpen(false);
 
     try {
@@ -74,10 +73,22 @@ const App: React.FC = () => {
         body: JSON.stringify({ topic })
       });
 
-      if (!response.ok) throw new Error('Failed to generate post');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error (${response.status}): ${errorText || 'No response body'}`);
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Invalid response format: Expected JSON from webhook.");
+      }
 
       const data: WebhookResponse = await response.json();
       
+      if (!data.postContent || !data.dataUrl) {
+        throw new Error("Missing data in response: Check if n8n is sending 'postContent' and 'dataUrl'.");
+      }
+
       const newPost: GeneratedPost = {
         id: crypto.randomUUID(),
         topic: topic,
@@ -88,9 +99,9 @@ const App: React.FC = () => {
 
       setCurrentPost(newPost);
       setHistory(prev => [newPost, ...prev]);
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Generation failed. Please try again.');
+    } catch (error: any) {
+      console.error('Generation Error:', error);
+      alert(`Generation failed: ${error.message}\n\nPlease ensure your n8n workflow is active and the webhook URL is correct.`);
     } finally {
       setIsGenerating(false);
     }
@@ -132,7 +143,6 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-300 overflow-hidden relative">
       
-      {/* Mobile Sidebar Backdrop */}
       {sidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm transition-opacity"
@@ -140,7 +150,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Responsive Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-800 
         transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:block
@@ -208,7 +217,6 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative min-w-0">
         <header className="h-16 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-6 md:px-8 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-2">
@@ -239,7 +247,6 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto px-4 py-6 sm:p-8 md:p-10 flex flex-col items-center">
           <div className="w-full max-w-6xl space-y-8 pb-24">
             
-            {/* Post Creator Input */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 sm:p-6 shadow-sm border border-gray-100 dark:border-slate-700">
               <h2 className="text-base sm:text-lg font-bold mb-4 flex items-center gap-2">
                 <Edit3 className="text-blue-500" size={18} />
@@ -268,8 +275,6 @@ const App: React.FC = () => {
 
             {currentPost && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                
-                {/* Editor Column */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="font-bold text-sm sm:text-base flex items-center gap-2">
@@ -301,7 +306,7 @@ const App: React.FC = () => {
                     
                     <button 
                       onClick={() => downloadImage(currentPost.dataUrl)}
-                      className="w-full py-3.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all text-sm sm:text-base"
+                      className="w-full py-3.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:hover:bg-slate-700 transition-all text-sm sm:text-base"
                     >
                       <Download size={18} className="text-blue-500" />
                       Download Visual
@@ -309,7 +314,6 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Media Column */}
                 <div className="space-y-4">
                   <h3 className="font-bold text-sm sm:text-base flex items-center gap-2">
                     <ImageIcon size={16} className="text-blue-500" />
@@ -332,7 +336,6 @@ const App: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* LinkedIn Mockup */}
                   <div className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm hidden sm:block max-w-md mx-auto lg:max-w-none">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full shrink-0"></div>
@@ -352,7 +355,6 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Empty State */}
             {!currentPost && !isGenerating && (
               <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center px-4 animate-in fade-in zoom-in-95 duration-700">
                 <div className="w-20 h-20 sm:w-24 sm:h-24 bg-blue-100 dark:bg-blue-900/30 rounded-3xl flex items-center justify-center text-blue-600 mb-6 rotate-3 shadow-xl">
@@ -368,7 +370,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Responsive Guide Modal */}
       {showPostGuide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl shadow-2xl p-6 sm:p-8 border border-blue-100 dark:border-slate-700 animate-in zoom-in-95 duration-300">
@@ -402,7 +403,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Full-Screen Loading Overlay */}
       {isGenerating && (
         <div className="fixed inset-0 z-50 bg-white/95 dark:bg-slate-900/98 flex flex-col items-center justify-center backdrop-blur-md px-6 text-center">
           <div className="relative w-24 h-24 sm:w-28 sm:h-28 mb-8">
