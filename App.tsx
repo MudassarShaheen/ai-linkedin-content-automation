@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { GeneratedPost, WebhookResponse } from './types.ts';
 
-const WEBHOOK_URL = 'https://muhammadahmadme085-n8n.hf.space/webhook/linkinpost';
+const WEBHOOK_URL = 'https://muhammadahmadme085-n8n.hf.space/webhook-test/linkinpost';
 
 const App: React.FC = () => {
   const [topic, setTopic] = useState('');
